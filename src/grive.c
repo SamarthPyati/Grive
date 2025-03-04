@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #include <SDL.h>
 
@@ -181,7 +182,11 @@ int main(int argc, char *argv[])
     }
 
     if (file_path) {
-        editor_load_from_file(&editor, file_path);
+        FILE *f = fopen(file_path, "r");
+        if (f != NULL) {
+            editor_load_from_file(&editor, f);
+        } 
+        fclose(f);
     }
 
     scc(SDL_Init(SDL_INIT_VIDEO));
