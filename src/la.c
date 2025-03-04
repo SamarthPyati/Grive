@@ -12,7 +12,11 @@ double vec2_norm(Vec2 v) {
     return sqrtf(v.x * v.x + v.y * v.y);
 } 
 
-Vec2 vec2(float x, float y) {
+Vec2 vec2c(float x) {
+    return (Vec2){.x = x, .y = x};
+}
+
+Vec2 vec2s(float x, float y) {
     return (Vec2){x, y};
 }
 

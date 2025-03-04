@@ -49,6 +49,10 @@ typedef struct {
     SDL_Rect glyph_table[ASCII_DISPLAY_HIGH - ASCII_DISPLAY_LOW + 1];
 } Font;
 
+
+#define FPS 30
+#define DELTA_TIME (1.0f / FPS)
+
 SDL_Surface *surface_from_file(const char *file_path)
 {
     int width, height, n;
@@ -143,11 +147,33 @@ void render_text_sized(SDL_Renderer *renderer, Font *font, const char *text, siz
     }
 }
 
-void render_cursor(SDL_Renderer *renderer, const Font *font, Editor *editor)
+
+// Camera 
+typedef struct {
+    Vec2 pos;
+    Vec2 vel;
+} Camera;
+
+Camera camera = {0};
+
+
+Vec2 window_size(SDL_Window *window) {
+    int w, h;
+    SDL_GetWindowSize(window, &w, &h);
+    return vec2s((float)w, (float)h);
+}
+
+Vec2 camera_project_point(SDL_Window *window, Vec2 point) {
+    // Add half of window dimension to properly project on screen 
+    return vec2_add(vec2_sub(point, camera.pos), vec2_mul(window_size(window), vec2c(0.5)));
+}
+
+void render_cursor(SDL_Renderer *renderer, const Font *font, Editor *editor, Camera *camera, SDL_Window *window)
 {
-    const Vec2 pos =
-        vec2((float) editor->cursor_col * FONT_CHAR_WIDTH * FONT_SCALE,
-              (float) editor->cursor_row * FONT_CHAR_HEIGHT * FONT_SCALE);
+    Vec2 pos =
+        vec2_sub(vec2s((float) editor->cursor_col * FONT_CHAR_WIDTH * FONT_SCALE,
+              (float) editor->cursor_row * FONT_CHAR_HEIGHT * FONT_SCALE), camera->pos);
+    pos = camera_project_point(window, pos);
 
     const SDL_Rect rect = {
         .x = (int) floorf(pos.x),
@@ -171,6 +197,7 @@ void usage(FILE *stream)
     fprintf(stream, "Usage: ./grive [FILE-PATH]\n");
 }
 
+// Main editor struct 
 Editor editor = {0};
 
 int main(int argc, char *argv[])
@@ -209,6 +236,9 @@ int main(int argc, char *argv[])
     // Load font
     Font font = font_load_from_file(renderer, "font/charmap-oldschool_white.png");
 
+    const Uint32 start_time = SDL_GetTicks();
+
+    // Main Loop 
     bool quit = false;
     while (!quit) {
         SDL_Event event = {0};
@@ -282,19 +312,38 @@ int main(int argc, char *argv[])
         scc(SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0));
         scc(SDL_RenderClear(renderer));
 
+        {
+            Vec2 cursor_pos =
+                        vec2s((float) editor.cursor_col * FONT_CHAR_WIDTH * FONT_SCALE,
+                              (float) editor.cursor_row * FONT_CHAR_HEIGHT * FONT_SCALE);   
+            Vec2 velocity = vec2_sub(cursor_pos, camera.pos);       // direction or vel
+            // lower down the velocity by 50 %
+            velocity = vec2_mul(velocity, vec2c(0.1));
+            camera.pos = vec2_add(camera.pos, vec2_mul(velocity, vec2c(DELTA_TIME)));
+        }
+
         for (size_t row = 0; row < editor.len; ++row) {
             const Line *line = editor.lines + row;
+            Vec2 line_pos = vec2_sub(vec2s(0.0f, (float) row * FONT_CHAR_HEIGHT * FONT_SCALE), camera.pos);
+            line_pos = camera_project_point(window, line_pos);
+
             render_text_sized(renderer, 
                 &font, 
                 line->chars, 
                 line->len, 
-                (Vec2){0.0f, (float) row * FONT_CHAR_HEIGHT * FONT_SCALE}, 
+                line_pos, 
                 0xFFFFFFFF, 
                 FONT_SCALE);
         }
-        render_cursor(renderer, &font, &editor);
+        render_cursor(renderer, &font, &editor, &camera, window);
 
         SDL_RenderPresent(renderer);
+
+        const Uint32 duration = SDL_GetTicks() - start_time;
+        const Uint32 delta_time_ms = 1000 / FPS;
+        if (duration < delta_time_ms) {
+            SDL_Delay(duration - delta_time_ms);
+        }
     }
 
     SDL_Quit();
