@@ -4,6 +4,12 @@
 #include <errno.h>
 
 #include <SDL.h>
+#define GLEW_STATIC
+#include <GL/glew.h>
+#define GL_GLEXT_PROTOTYPE
+#include <SDL_opengl.h>
+#define GLFW_INCLUDE_GLEXT
+#include <GLFW/glfw3.h>
 
 #include "la.h"
 #include "common.h"
@@ -149,6 +155,8 @@ void render_text_sized(SDL_Renderer *renderer, Font *font, const char *text, siz
 
 
 // Camera 
+#define CAM_BUFFER vec2s(200, 0)
+
 typedef struct {
     Vec2 pos;
     Vec2 vel;
@@ -165,7 +173,7 @@ Vec2 window_size(SDL_Window *window) {
 
 Vec2 camera_project_point(SDL_Window *window, Vec2 point) {
     // Add half of window dimension to properly project on screen 
-    return vec2_add(vec2_sub(point, camera.pos), vec2_mul(window_size(window), vec2c(0.5)));
+    return vec2_add(vec2_add(vec2_sub(point, camera.pos), vec2_mul(window_size(window), vec2c(0.5))), CAM_BUFFER);
 }
 
 void render_cursor(SDL_Renderer *renderer, const Font *font, Editor *editor, Camera *camera, SDL_Window *window)
@@ -200,6 +208,87 @@ void usage(FILE *stream)
 // Main editor struct 
 Editor editor = {0};
 
+// Courtesy: https://github.com/tsoding/opengl-template
+void MessageCallback(GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei length,
+    const GLchar* message,
+    const void* userParam)
+{
+    (void) source;
+    (void) id;
+    (void) length;
+    (void) userParam;
+    fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+    (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+    type, severity, message);
+}
+
+#define OPENGL_RENDERER
+#if defined(OPENGL_RENDERER)
+// OPEN GL RENDERER
+int main(int argc, char *argv[]) {
+    (void) argc;
+    (void) argv;
+
+    scc(SDL_Init(SDL_INIT_VIDEO));
+
+    Uint32 windowFlags = SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
+
+    // Window 
+    SDL_Window *window = scp(SDL_CreateWindow("Grive", 
+        SDL_WINDOWPOS_CENTERED, 
+        SDL_WINDOWPOS_CENTERED, 
+        WWIDTH, 
+        WHEIGHT, 
+        windowFlags
+    ));
+
+    {   // Set attributes and gl profile 
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        int debugFlag = SDL_GL_CONTEXT_DEBUG_FLAG;
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_FLAGS, &debugFlag);
+
+        int major, minor;
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major);
+        SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minor);
+        fprintf(stdout, "[INFO] GL Version: %d.%d\n", major, minor);    
+
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
+    }
+
+    void *glContext = scp(SDL_GL_CreateContext(window));
+
+    // Get version info
+    const GLubyte* renderer = glGetString(GL_RENDERER); // get renderer string
+    const GLubyte* version = glGetString(GL_VERSION); // version as a string
+
+    printf("[INFO] Renderer: %s\n", renderer);
+    printf("[INFO] OpenGL Version Supported %s\n", version);
+
+    if (glewInit() != GLEW_OK) {
+        RAISE("GL", "Could not initialize GLEW!"); exit(1);
+    }
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    if (GLEW_ARB_debug_output) {
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageCallback(&MessageCallback, 0);
+    } else {
+        fprintf(stderr, "[WARNING] GL extension GLEW_ARB_debug_output is not available.\n");
+    }
+
+    return 0;
+}
+
+#else 
+// STANDARD SDL RENDERER 
 int main(int argc, char *argv[])
 {
     const char *file_path = NULL;
@@ -312,6 +401,8 @@ int main(int argc, char *argv[])
         scc(SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0));
         scc(SDL_RenderClear(renderer));
 
+
+        // Scrolling
         {
             Vec2 cursor_pos =
                         vec2s((float) editor.cursor_col * FONT_CHAR_WIDTH * FONT_SCALE,
@@ -320,7 +411,7 @@ int main(int argc, char *argv[])
             // lower down the velocity by 50 %
             velocity = vec2_mul(velocity, vec2c(0.1));
             camera.pos = vec2_add(camera.pos, vec2_mul(velocity, vec2c(DELTA_TIME)));
-        }
+        }   
 
         for (size_t row = 0; row < editor.len; ++row) {
             const Line *line = editor.lines + row;
@@ -339,6 +430,7 @@ int main(int argc, char *argv[])
 
         SDL_RenderPresent(renderer);
 
+        // Set SDL_Delay
         const Uint32 duration = SDL_GetTicks() - start_time;
         const Uint32 delta_time_ms = 1000 / FPS;
         if (duration < delta_time_ms) {
@@ -350,6 +442,7 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+#endif
 
 #define SV_IMPLEMENTATION
 #include "./sv.h"

@@ -55,7 +55,7 @@ void line_insert_text_sized_before(Line *line, const char *text, size_t text_siz
             line->chars + *col,
             line->len - *col);
     memcpy(line->chars + *col, text, text_size);
-    line->len += text_size;
+    line->len += text_size;   
     *col += text_size;
 }
 
