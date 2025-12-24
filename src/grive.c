@@ -173,7 +173,7 @@ Vec2 window_size(SDL_Window *window) {
 
 Vec2 camera_project_point(SDL_Window *window, Vec2 point) {
     // Add half of window dimension to properly project on screen 
-    return vec2_add(vec2_add(vec2_sub(point, camera.pos), vec2_mul(window_size(window), vec2c(0.5))), CAM_BUFFER);
+    return vec2_add(vec2_sub(point, camera.pos), vec2_mul(window_size(window), vec2c(0.75)));
 }
 
 void render_cursor(SDL_Renderer *renderer, const Font *font, Editor *editor, Camera *camera, SDL_Window *window)
@@ -226,7 +226,7 @@ void MessageCallback(GLenum source,
     type, severity, message);
 }
 
-#define OPENGL_RENDERER
+// #define OPENGL_RENDERER
 #if defined(OPENGL_RENDERER)
 // OPEN GL RENDERER
 int main(int argc, char *argv[]) {
@@ -257,11 +257,9 @@ int main(int argc, char *argv[]) {
         SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major);
         SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minor);
         fprintf(stdout, "[INFO] GL Version: %d.%d\n", major, minor);    
-
-        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
     }
 
-    void *glContext = scp(SDL_GL_CreateContext(window));
+    scp(SDL_GL_CreateContext(window));
 
     // Get version info
     const GLubyte* renderer = glGetString(GL_RENDERER); // get renderer string
@@ -271,7 +269,7 @@ int main(int argc, char *argv[]) {
     printf("[INFO] OpenGL Version Supported %s\n", version);
 
     if (glewInit() != GLEW_OK) {
-        RAISE("GL", "Could not initialize GLEW!"); exit(1);
+    RAISE("GL", "Could not initialize GLEW!"); exit(1);
     }
 
     glEnable(GL_BLEND);
@@ -282,7 +280,7 @@ int main(int argc, char *argv[]) {
         glDebugMessageCallback(&MessageCallback, 0);
     } else {
         fprintf(stderr, "[WARNING] GL extension GLEW_ARB_debug_output is not available.\n");
-    }
+    }   
 
     return 0;
 }
@@ -409,8 +407,9 @@ int main(int argc, char *argv[])
                               (float) editor.cursor_row * FONT_CHAR_HEIGHT * FONT_SCALE);   
             Vec2 velocity = vec2_sub(cursor_pos, camera.pos);       // direction or vel
             // lower down the velocity by 50 %
-            velocity = vec2_mul(velocity, vec2c(0.1));
-            camera.pos = vec2_add(camera.pos, vec2_mul(velocity, vec2c(DELTA_TIME)));
+            velocity = vec2_mul(velocity, vec2c(0.5));
+            camera.pos = vec2_add(camera.pos, 
+                vec2_mul(velocity, vec2c(DELTA_TIME)));
         }   
 
         for (size_t row = 0; row < editor.len; ++row) {
